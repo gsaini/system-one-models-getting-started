@@ -1,0 +1,72 @@
+[
+  {
+    "start": "Thinking, Fast and Slow",
+    "target": "Nudge (book)",
+    "shortest": 2
+  },
+  {
+    "start": "Thinking, Fast and Slow",
+    "target": "Antifragile (book)",
+    "shortest": 2
+  },
+  {
+    "start": "Thinking, Fast and Slow",
+    "target": "Monty Hall problem",
+    "shortest": 2
+  },
+  {
+    "start": "Thinking, Fast and Slow",
+    "target": "Dopamine",
+    "shortest": 2
+  },
+  {
+    "start": "Thinking, Fast and Slow",
+    "target": "Mihaly Csikszentmihalyi",
+    "shortest": 2
+  },
+  {
+    "start": "Thinking, Fast and Slow",
+    "target": "Paul Slovic",
+    "shortest": 2
+  },
+  {
+    "start": "Thinking, Fast and Slow",
+    "target": "Reinforcement learning",
+    "shortest": 2
+  },
+  {
+    "start": "Bayes' theorem",
+    "target": "Naive Bayes classifier",
+    "shortest": 2
+  },
+  {
+    "start": "Bayes' theorem",
+    "target": "Garry Kasparov",
+    "shortest": 2
+  },
+  {
+    "start": "Bayes' theorem",
+    "target": "Sensitivity and specificity",
+    "shortest": 2
+  },
+  {
+    "start": "Bayes' theorem",
+    "target": "Prosecutor's fallacy",
+    "shortest": 2
+  },
+  {
+    "start": "Bayes' theorem",
+    "target": "Richard Thaler",
+    "shortest": 3
+  },
+  {
+    "start": "Thinking, Fast and Slow",
+    "target": "Thomas Bayes",
+    "shortest": 3
+  },
+  {
+    "start": "Bayes' theorem",
+    "target": "Nudge (book)",
+    "shortest": 3
+  }
+]

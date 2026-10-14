@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ["3.11", "3.13"]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.2.0 # setup-uv publishes exact version tags only
+        with:
+          python-version: ${{ matrix.python }}
+      - run: uv sync --locked
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      # Offline only: the keyword baseline answers through the real TypeSafe SDK. No keys, no cost.
+      - run: uv run pytest -q
+      - run: uv run systemone demo --out /tmp/runs
+      - run: uv run systemone parallel --out /tmp/runs
+      - run: uv run systemone calibration --limit 300 --out /tmp/runs
+      - run: uv run systemone wikirace --out /tmp/runs

@@ -1,0 +1,40 @@
+[project]
+name = "system-one-models-getting-started"
+version = "0.1.0"
+description = "TypeSafe's System One launch claims, each turned into a runnable experiment: Jev vs an LLM vs keyword rules, through one interface."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+authors = [{ name = "Gopal Saini" }]
+dependencies = [
+    "typesafe-sdk>=0.7.4",
+    # TypeSafe's own drop-in LLM stand-in for TypeSafeClient, for apples-to-apples comparison.
+    # providers.py reaches into its Anthropic provider, so the minor version is pinned.
+    "system-one-adapter[anthropic]>=0.2.1,<0.3",
+]
+
+[project.scripts]
+systemone = "systemone.cli:main"
+
+[dependency-groups]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/systemone"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["systemone"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
