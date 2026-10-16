@@ -2,7 +2,8 @@
 
 - **Jev** via the official `typesafe-sdk`.
 - **An LLM** via TypeSafe's `system-one-adapter`, a drop-in `TypeSafeClient` replacement that asks
-  the LLM for the same typed answers with structured outputs. Claude by default.
+  the LLM for the same typed answers with structured outputs. Claude by default; or a local
+  model served by Ollama (`--ollama`), through the adapter's OpenAI-compatible provider.
 - **Keyword baseline**: offline rules behind the real SDK (see baseline.py).
 
 `Arm.ask` times every call, records tokens and list-price cost, and turns failures into recorded
@@ -11,9 +12,11 @@ errors instead of exceptions, so an experiment can finish and report them.
 
 from __future__ import annotations
 
+import json
 import os
 import statistics
 import time
+import urllib.request
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -34,6 +37,8 @@ PRICES: dict[str, tuple[float, float]] = {
     "keyword-baseline": (0.0, 0.0),
 }
 DEFAULT_LLM = "claude-opus-5-5"
+DEFAULT_OLLAMA = "tinyllama"
+OLLAMA_URL = "http://localhost:11434/v1"
 
 
 class MissingCredentials(RuntimeError):
@@ -140,6 +145,32 @@ def llm_arm(model: str = DEFAULT_LLM, *, effort: str | None = "low", max_tokens:
     )
     label = f"{model}" + (f" (effort {effort})" if effort else " (default effort)")
     return Arm(label, client, PRICES.get(model, PRICES[DEFAULT_LLM]))
+
+
+def ollama_arm(model: str = DEFAULT_OLLAMA, *, base_url: str = OLLAMA_URL) -> Arm:
+    """A local model served by Ollama, through the adapter's OpenAI-compatible Chat Completions provider. Free."""
+    from system_one_adapter import SystemOneAdapterClient
+    from system_one_adapter.providers.openai import OpenAIProvider
+
+    # Fail once up front rather than recording a connection error for every call.
+    try:
+        with urllib.request.urlopen(f"{base_url}/models", timeout=3) as resp:
+            served = {m["id"] for m in json.load(resp)["data"]}
+    except (OSError, ValueError, KeyError) as exc:
+        raise MissingCredentials(f"No Ollama server at {base_url} (start it with `ollama serve`): {exc}") from exc
+    if model not in served and f"{model}:latest" not in served:
+        raise MissingCredentials(f"Ollama doesn't have {model!r}; run `ollama pull {model}`.")
+
+    provider = OpenAIProvider(model, base_url=base_url, api_key="ollama", api="chat_completions")
+    client = SystemOneAdapterClient(
+        structured_outputs=True,  # Ollama constrains decoding to the JSON schema
+        llm_answer_mode="probabilities",
+        normalize_probabilities=True,
+        n_retry_malformed_structure=1,
+        provider="openai",
+        model=provider,
+    )
+    return Arm(f"{model} (Ollama)", client, (0.0, 0.0))
 
 
 def summary_table(arms: list[Arm]) -> str:

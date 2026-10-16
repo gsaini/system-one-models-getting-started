@@ -10,7 +10,7 @@ dependencies = [
     "typesafe-sdk>=0.7.4",
     # TypeSafe's own drop-in LLM stand-in for TypeSafeClient, for apples-to-apples comparison.
     # providers.py reaches into its Anthropic provider, so the minor version is pinned.
-    "system-one-adapter[anthropic]>=0.2.1,<0.3",
+    "system-one-adapter[anthropic,openai]>=0.2.1,<0.3",
 ]
 
 [project.scripts]

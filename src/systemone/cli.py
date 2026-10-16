@@ -1,4 +1,4 @@
-"""`systemone demo | parallel | calibration | wikirace` — offline by default; --live adds Jev, --llm adds Claude."""
+"""`systemone demo | parallel | calibration | wikirace` — offline by default; --live adds Jev, --llm adds Claude, --ollama a local model."""
 
 from __future__ import annotations
 
@@ -9,7 +9,18 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from systemone.arms import DEFAULT_LLM, Arm, MissingCredentials, baseline_arm, jev_arm, llm_arm, summary_table
+from systemone.arms import (
+    DEFAULT_LLM,
+    DEFAULT_OLLAMA,
+    OLLAMA_URL,
+    Arm,
+    MissingCredentials,
+    baseline_arm,
+    jev_arm,
+    llm_arm,
+    ollama_arm,
+    summary_table,
+)
 from systemone.data import load_races, load_sms, load_snapshot
 from systemone.experiments import calibration, demo, parallel, wikirace
 
@@ -24,6 +35,8 @@ def build_arms(args: argparse.Namespace, answerer) -> list[Arm]:
         arms.append(jev_arm())
     if args.llm:
         arms.append(llm_arm(args.model, effort=None if args.effort == "default" else args.effort))
+    if args.ollama:
+        arms.append(ollama_arm(args.ollama, base_url=args.ollama_url))
     return arms
 
 
@@ -37,7 +50,9 @@ def gate(args: argparse.Namespace, what: str) -> bool:
 
 def save(args: argparse.Namespace, name: str, report: dict[str, Any], text: str) -> None:
     stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
-    mode = "+".join(["baseline"] + (["jev"] if args.live else []) + (["llm"] if args.llm else []))
+    mode = "+".join(
+        ["baseline"] + (["jev"] if args.live else []) + (["llm"] if args.llm else []) + (["ollama"] if args.ollama else [])
+    )
     out = args.out / f"{name}-{mode}-{stamp}"
     out.mkdir(parents=True, exist_ok=True)
     (out / "report.md").write_text(text + "\n", encoding="utf-8")
@@ -61,6 +76,14 @@ def main(argv: list[str] | None = None) -> int:
         )
         p.add_argument("--model", default=DEFAULT_LLM, help=f"LLM for --llm (default {DEFAULT_LLM})")
         p.add_argument("--effort", default="low", help="effort for --llm: low|medium|high|xhigh|max|default")
+        p.add_argument(
+            "--ollama",
+            nargs="?",
+            const=DEFAULT_OLLAMA,
+            metavar="MODEL",
+            help=f"add a local model served by Ollama, free (default {DEFAULT_OLLAMA})",
+        )
+        p.add_argument("--ollama-url", default=OLLAMA_URL, help=f"Ollama's OpenAI-compatible URL (default {OLLAMA_URL})")
         p.add_argument("--yes", action="store_true", help="confirm a live run")
         p.add_argument("--out", type=Path, default=Path("runs"))
         if name == "parallel":
