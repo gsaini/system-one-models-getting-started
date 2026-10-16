@@ -83,3 +83,12 @@ def test_models_endpoint_is_served_too():
     baseline = KeywordBaseline(lambda n, q, s: None)
     client = TypeSafeClient(api_key="k", transport=baseline.transport(), retry=RetryPolicy(max_retries=0))
     assert client.models.list().models[0].name == "keyword-baseline"
+
+
+def test_ollama_arm_fails_once_up_front_when_no_server_is_running():
+    import pytest
+
+    from systemone.arms import MissingCredentials, ollama_arm
+
+    with pytest.raises(MissingCredentials, match="No Ollama server"):
+        ollama_arm("tinyllama", base_url="http://127.0.0.1:9/v1")

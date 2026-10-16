@@ -1,4 +1,4 @@
-"""`systemone demo | parallel | calibration | wikirace` — offline by default; --live adds Jev, --llm adds Claude, --ollama a local model."""
+"""`systemone demo | parallel | calibration | wikirace`: offline by default; --live, --llm, --ollama add arms."""
 
 from __future__ import annotations
 
@@ -51,7 +51,10 @@ def gate(args: argparse.Namespace, what: str) -> bool:
 def save(args: argparse.Namespace, name: str, report: dict[str, Any], text: str) -> None:
     stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
     mode = "+".join(
-        ["baseline"] + (["jev"] if args.live else []) + (["llm"] if args.llm else []) + (["ollama"] if args.ollama else [])
+        ["baseline"]
+        + (["jev"] if args.live else [])
+        + (["llm"] if args.llm else [])
+        + (["ollama"] if args.ollama else [])
     )
     out = args.out / f"{name}-{mode}-{stamp}"
     out.mkdir(parents=True, exist_ok=True)
@@ -83,7 +86,9 @@ def main(argv: list[str] | None = None) -> int:
             metavar="MODEL",
             help=f"add a local model served by Ollama, free (default {DEFAULT_OLLAMA})",
         )
-        p.add_argument("--ollama-url", default=OLLAMA_URL, help=f"Ollama's OpenAI-compatible URL (default {OLLAMA_URL})")
+        p.add_argument(
+            "--ollama-url", default=OLLAMA_URL, help=f"Ollama's OpenAI-compatible URL (default {OLLAMA_URL})"
+        )
         p.add_argument("--yes", action="store_true", help="confirm a live run")
         p.add_argument("--out", type=Path, default=Path("runs"))
         if name == "parallel":
