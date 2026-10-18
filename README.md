@@ -57,7 +57,7 @@ uv run systemone demo
 uv run systemone parallel
 uv run systemone calibration          # add --limit 200 for a quick look
 uv run systemone wikirace
-uv run pytest -q                      # 23 tests
+uv run pytest -q                      # 31 tests
 ```
 
 Each run prints a Markdown report and saves it with the raw numbers under `runs/`.
@@ -77,6 +77,35 @@ uv run systemone demo --live --llm --effort default            # Opus 5.5's defa
 ```
 
 Live runs print a cost estimate and stop until you pass `--yes`.
+
+### Free, with a local model (Ollama)
+
+Any model [Ollama](https://ollama.com) serves can play, through the adapter's OpenAI-compatible provider. It costs nothing and needs no keys.
+
+```bash
+ollama pull tinyllama                             # or qwen2.5:3b, llama3.2, …
+uv run systemone calibration --ollama --limit 100
+uv run systemone demo --ollama llama3.2           # name a model; the default is tinyllama
+```
+
+A 1.1B model like tinyllama mostly shows what Jev claims to fix: Ollama keeps the JSON in shape, but not the numbers in it, so answers come back with "probabilities" like 141 and count as broken.
+
+## Show it to someone
+
+Four commands for demos rather than measurement. Each one takes the same `--ollama`, `--llm` and `--live` flags as the experiments.
+
+| Command | What you see |
+|---|---|
+| `systemone ui` | A web playground on `127.0.0.1:8765`. Write a message, and each player fills in the same bubble answer sheet; the darker the bubble, the surer it is. A fast player's answers appear while a slow one is still working. Tabs: support ticket, spam check, Wikirace replayed hop by hop. |
+| `systemone ask "I was charged twice, refund me"` | The 8-question support form about your own text, every player side by side in the terminal. `--form spam` asks the spam question instead. |
+| `systemone race` | One Wikirace printed as it happens: at each page, the player's top three links and the one it took. `--race N` picks another (`--list` shows them). |
+| `systemone scoreboard` | One leaderboard from a short run of every graded experiment: spam spotted right, honest confidence, Wikiraces won, broken answers, speed, cost. |
+
+```bash
+uv run systemone ui --ollama                      # keyword rules vs tinyllama in the browser
+uv run systemone race --race 9                    # Bayes' theorem to Garry Kasparov
+uv run systemone scoreboard --ollama --limit 100 --races 4
+```
 
 ## Results
 
@@ -135,16 +164,20 @@ Not run: the machine this was built on had neither key. If you run the live comm
 
 ```text
 src/systemone/
-  arms.py          Jev / LLM / baseline behind one interface; per-call latency, tokens, cost, errors
+  arms.py          Jev / LLM / Ollama / baseline behind one interface; per-call latency, tokens, cost, errors
   baseline.py      keyword rules served through the real SDK over httpx2.MockTransport
   providers.py     the adapter's Anthropic provider plus `effort`
   confidence.py    TypeSafe's confidence formulas, for the baseline's answers
   data.py          the SMS sample, the Wikipedia snapshot, the races
   experiments/     demo.py · parallel.py · calibration.py · wikirace.py — run() + markdown()
-  cli.py           `systemone <experiment> [--live] [--llm] [--yes]`
+  playground.py    the forms you can fill with your own text: support ticket, spam check
+  views.py         terminal views for `ask` and `race`
+  scoreboard.py    every graded experiment, boiled down to one leaderboard
+  ui/              `systemone ui`: a standard-library server and one page
+  cli.py           `systemone <command> [--live] [--llm] [--ollama [MODEL]] [--yes]`
 data/              sms_spam_sample.jsonl · wiki_snapshot.json.gz · wiki_races.json · README.md (licences)
 scripts/           build_wiki_snapshot.py · pick_races.py
-tests/             23 offline tests: SDK round trip, metrics on known inputs, two-stage above 255, effort provider
+tests/             31 offline tests: SDK round trip, metrics on known inputs, two-stage above 255, effort provider, demo commands
 docs/              claims.md · how-it-was-built.md
 ```
 

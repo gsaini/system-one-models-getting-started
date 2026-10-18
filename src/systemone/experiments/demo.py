@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from typesafe_sdk import Choice, Noul, Score
+from typesafe_sdk import Choice, Noul, Score, SystemOneResponse
 
 from systemone.arms import Arm
 from systemone.baseline import any_of, choice_answer, count_of, noul_answer, score_answer, text_of
@@ -102,32 +102,39 @@ def answerer(name: str, question: dict[str, Any], state: Any) -> dict[str, Any] 
     return None
 
 
+def state_for(message: str) -> dict[str, Any]:
+    """The demo's account with a different `latest_message`: what `systemone ask` and the playground send."""
+    return {"account": STATE["account"], "latest_message": message}
+
+
+def flatten(response: SystemOneResponse) -> dict[str, Any]:
+    """Typed answers as plain dicts: {name: {type, answer, confidence?, probabilities?}}."""
+    out = {}
+    for name, answer in response.answers.items():
+        if answer.type == "noul":
+            out[name] = {"type": "noul", "answer": round(answer.noul, 3)}
+        elif answer.type == "choice":
+            out[name] = {
+                "type": "choice",
+                "answer": answer.choice,
+                "confidence": round(answer.confidence, 3),
+                "probabilities": {k: round(v, 3) for k, v in answer.probabilities.items()},
+            }
+        else:
+            out[name] = {
+                "type": "score",
+                "answer": round(answer.score, 2),
+                "confidence": round(answer.confidence, 3),
+                "probabilities": {str(k): round(v, 3) for k, v in answer.probabilities.items()},
+            }
+    return out
+
+
 def run(arms: list[Arm]) -> dict[str, Any]:
     report: dict[str, Any] = {"state": STATE, "answers": {}}
     for arm in arms:
         response = arm.ask(STATE, QUESTIONS)
-        if response is None:
-            report["answers"][arm.name] = {"error": arm.calls[-1].error}
-            continue
-        out = {}
-        for name, answer in response.answers.items():
-            if answer.type == "noul":
-                out[name] = {"type": "noul", "answer": round(answer.noul, 3)}
-            elif answer.type == "choice":
-                out[name] = {
-                    "type": "choice",
-                    "answer": answer.choice,
-                    "confidence": round(answer.confidence, 3),
-                    "probabilities": {k: round(v, 3) for k, v in answer.probabilities.items()},
-                }
-            else:
-                out[name] = {
-                    "type": "score",
-                    "answer": round(answer.score, 2),
-                    "confidence": round(answer.confidence, 3),
-                    "probabilities": {str(k): round(v, 3) for k, v in answer.probabilities.items()},
-                }
-        report["answers"][arm.name] = out
+        report["answers"][arm.name] = {"error": arm.calls[-1].error} if response is None else flatten(response)
     report["arms"] = [a.summary() for a in arms]
     return report
 

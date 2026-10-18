@@ -1,4 +1,8 @@
-"""`systemone demo | parallel | calibration | wikirace`: offline by default; --live, --llm, --ollama add arms."""
+"""`systemone demo | parallel | calibration | wikirace`: offline by default; --live, --llm, --ollama add arms.
+
+`systemone ask | race | scoreboard | ui` are for showing the idea to a person: your own text, a race
+followed hop by hop, one leaderboard, and a web playground.
+"""
 
 from __future__ import annotations
 
@@ -9,6 +13,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from systemone import scoreboard
 from systemone.arms import (
     DEFAULT_LLM,
     DEFAULT_OLLAMA,
@@ -23,6 +28,8 @@ from systemone.arms import (
 )
 from systemone.data import load_races, load_sms, load_snapshot
 from systemone.experiments import calibration, demo, parallel, wikirace
+from systemone.playground import FORMS, ask
+from systemone.views import ask_text, race_live
 
 OFFLINE_NOTE = (
     "Offline: the keyword baseline answers, not Jev. It shows the mechanics and gives a baseline, nothing more."
@@ -71,6 +78,10 @@ def main(argv: list[str] | None = None) -> int:
         ("parallel", "N questions in one request vs N requests: latency, tokens, agreement"),
         ("calibration", "spam Nouls graded against labels: accuracy, Brier, ECE, reliability"),
         ("wikirace", "Wikiracing on a bundled link snapshot: Choice, and two-stage above 255 options"),
+        ("ask", "fill in a form about your own message, every player side by side"),
+        ("race", "one Wikirace, printed hop by hop with each player's top picks"),
+        ("scoreboard", "a short run of every graded experiment, as one leaderboard"),
+        ("ui", "a local web playground: type a message, watch each player fill in the form"),
     ]:
         p = sub.add_parser(name, help=help_)
         p.add_argument("--live", action="store_true", help="add Jev (TYPESAFE_API_KEY)")
@@ -95,10 +106,27 @@ def main(argv: list[str] | None = None) -> int:
             p.add_argument("--repeats", type=int, default=1)
         if name == "calibration":
             p.add_argument("--limit", type=int, default=1000, help="messages to grade (of 1,000)")
-        if name == "wikirace":
+        if name in ("wikirace", "scoreboard"):
             p.add_argument("--races", type=int, default=None, help="only the first N races")
+        if name == "ask":
+            p.add_argument("message", nargs="?", default="-", help="the message; '-' or nothing reads stdin")
+            p.add_argument("--form", choices=sorted(FORMS), default="support", help="which questions to ask")
+        if name == "race":
+            p.add_argument("--race", type=int, default=DEFAULT_RACE, help=f"race number (default {DEFAULT_RACE})")
+            p.add_argument("--list", action="store_true", help="list the races and stop")
+        if name == "scoreboard":
+            p.add_argument("--limit", type=int, default=200, help="spam messages to grade (default 200)")
+        if name == "ui":
+            p.add_argument("--port", type=int, default=8765)
+            p.add_argument("--no-browser", action="store_true", help="don't open a browser tab")
     args = parser.parse_args(argv)
 
+    if args.cmd in SHOW:
+        try:
+            return SHOW[args.cmd](args)
+        except MissingCredentials as exc:
+            print(exc, file=sys.stderr)
+            return 2
     if not (args.live or args.llm):
         print(f"▸ {OFFLINE_NOTE}\n", file=sys.stderr)
     try:
@@ -147,6 +175,72 @@ def main(argv: list[str] | None = None) -> int:
     print(text)
     save(args, args.cmd, report, text)
     return 0
+
+
+DEFAULT_RACE = 9  # Bayes' theorem → Garry Kasparov: needs knowing that Turing links the two
+
+
+def cmd_ask(args: argparse.Namespace) -> int:
+    message = (sys.stdin.read() if args.message == "-" else args.message).strip()
+    if not message:
+        print('Give a message: systemone ask "I want my money back"', file=sys.stderr)
+        return 2
+    if not gate(args, "one request per model arm, well under a cent"):
+        return 2
+    form = FORMS[args.form]
+    results = [ask(arm, form, message) for arm in build_arms(args, form.answerer)]
+    print(ask_text(form, message, results))
+    return 0
+
+
+def cmd_race(args: argparse.Namespace) -> int:
+    races = load_races()
+    if args.list:
+        for i, r in enumerate(races, 1):
+            print(f"{i:>3}  {r.start} → {r.target}  ({r.shortest} hops)")
+        return 0
+    if not 1 <= args.race <= len(races):
+        print(f"--race must be 1 to {len(races)}; see systemone race --list", file=sys.stderr)
+        return 2
+    if not gate(args, "a handful of requests per model arm, well under a cent"):
+        return 2
+    snapshot, race = load_snapshot(), races[args.race - 1]
+    for arm in build_arms(args, wikirace.answerer):
+        race_live(arm, snapshot, race)
+    return 0
+
+
+def cmd_scoreboard(args: argparse.Namespace) -> int:
+    messages, snapshot, races = load_sms(limit=args.limit), load_snapshot(), load_races()
+    if args.races:
+        races = races[: args.races]
+    if not gate(
+        args,
+        f"1 + {len(messages)} requests plus {len(races)} races per model arm; "
+        f"Jev well under a cent, Claude roughly ${len(messages) * 0.003 + 0.1:.2f} at low effort",
+    ):
+        return 2
+    report = scoreboard.run(lambda answerer: build_arms(args, answerer), messages, snapshot, races)
+    text = scoreboard.markdown(report)
+    print(text)
+    save(args, "scoreboard", report, text)
+    return 0
+
+
+def cmd_ui(args: argparse.Namespace) -> int:
+    from systemone.ui.server import Playground, serve
+
+    if not gate(args, "every click is a request per model arm; Claude costs about a cent per click"):
+        return 2
+    serve(
+        Playground(lambda answerer: build_arms(args, answerer), load_snapshot(), load_races()),
+        port=args.port,
+        open_browser=not args.no_browser,
+    )
+    return 0
+
+
+SHOW = {"ask": cmd_ask, "race": cmd_race, "scoreboard": cmd_scoreboard, "ui": cmd_ui}
 
 
 if __name__ == "__main__":

@@ -17,6 +17,7 @@ race is reproducible and never touches the live site.
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
@@ -41,6 +42,7 @@ class Step:
     chosen: str
     confidence: float | None
     requests: int
+    top: list[tuple[str, float]] = field(default_factory=list)  # the final Choice's best options, for viewers
 
 
 @dataclass
@@ -75,8 +77,10 @@ def answerer(name: str, question: dict[str, Any], state: Any) -> dict[str, Any] 
     return None
 
 
-def choose(arm: Arm, page: str, candidates: list[str], target: str) -> tuple[str | None, str, float | None, int]:
-    """Pick the next hop. Returns (chosen, mode, confidence, requests_made)."""
+def choose(
+    arm: Arm, page: str, candidates: list[str], target: str
+) -> tuple[str | None, str, float | None, int, list[tuple[str, float]]]:
+    """Pick the next hop. Returns (chosen, mode, confidence, requests_made, top three options)."""
     pool, requests, mode = candidates, 0, "choice"
     if len(candidates) > MAX_OPTIONS:
         mode = "two-stage"
@@ -93,7 +97,7 @@ def choose(arm: Arm, page: str, candidates: list[str], target: str) -> tuple[str
             response = arm.ask({"target": target, "candidates": chunk}, questions)
             requests += 1
             if response is None:
-                return None, mode, None, requests
+                return None, mode, None, requests, []
             scored += [(response.nouls[f"c{i}"].noul, title) for i, title in enumerate(chunk)]
         scored.sort(key=lambda s: -s[0])
         pool = [title for _, title in scored[:STAGE1_KEEP]]
@@ -108,12 +112,22 @@ def choose(arm: Arm, page: str, candidates: list[str], target: str) -> tuple[str
     response = arm.ask({"current": page, "target": target}, {"next": question})
     requests += 1
     if response is None:
-        return None, mode, None, requests
+        return None, mode, None, requests, []
     answer = response.choices["next"]
-    return answer.choice, mode, answer.confidence, requests
+    top = sorted(answer.probabilities.items(), key=lambda kv: -kv[1])[:3]
+    return answer.choice, mode, answer.confidence, requests, top
 
 
-def navigate(arm: Arm, snapshot: Snapshot, race: Race, max_hops: int = MAX_HOPS) -> RaceResult:
+def navigate(
+    arm: Arm,
+    snapshot: Snapshot,
+    race: Race,
+    max_hops: int = MAX_HOPS,
+    *,
+    on_think: Callable[[str, int], None] | None = None,
+    on_step: Callable[[Step], None] | None = None,
+) -> RaceResult:
+    """Race one arm. `on_think(page, candidates)` fires before a model decision, `on_step` after every hop."""
     result = RaceResult(race.start, race.target, False, "", [race.start])
     visited = {race.start}
     for _ in range(max_hops):
@@ -122,17 +136,23 @@ def navigate(arm: Arm, snapshot: Snapshot, race: Race, max_hops: int = MAX_HOPS)
         if race.target in links:  # exact lookup is code's job, not the model's
             result.path.append(race.target)
             result.steps.append(Step(page, len(links), "direct", race.target, None, 0))
+            if on_step:
+                on_step(result.steps[-1])
             result.success, result.reason = True, "reached"
             return result
         candidates = [t for t in links if snapshot.known(t) and t not in visited]
         if not candidates:
             result.reason = f"dead end at {page!r}"
             return result
-        chosen, mode, confidence, requests = choose(arm, page, candidates, race.target)
+        if on_think:
+            on_think(page, len(candidates))
+        chosen, mode, confidence, requests, top = choose(arm, page, candidates, race.target)
         if chosen is None:
             result.reason = f"arm error at {page!r}: {arm.calls[-1].error}"
             return result
-        result.steps.append(Step(page, len(candidates), mode, chosen, confidence, requests))
+        result.steps.append(Step(page, len(candidates), mode, chosen, confidence, requests, top))
+        if on_step:
+            on_step(result.steps[-1])
         visited.add(chosen)
         result.path.append(chosen)
     result.reason = f"hop budget ({max_hops}) spent"

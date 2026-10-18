@@ -28,3 +28,6 @@ jobs:
       - run: uv run systemone parallel --out /tmp/runs
       - run: uv run systemone calibration --limit 300 --out /tmp/runs
       - run: uv run systemone wikirace --out /tmp/runs
+      - run: uv run systemone ask "I was charged twice, please refund me"
+      - run: uv run systemone race
+      - run: uv run systemone scoreboard --limit 100 --out /tmp/runs

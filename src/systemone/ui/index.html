@@ -1,0 +1,343 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>System One playground</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #eef4ea;      /* answer-sheet paper */
+    --panel: #f8fbf5;
+    --ink: #2f6b4f;        /* the form's printed green */
+    --ink-soft: #9dbfa9;   /* bubble outlines, rules */
+    --graphite: #25272b;   /* pencil */
+    --grader: #c23b22;     /* the grader's red pen */
+    --muted: #5d6f64;
+    --print: "Barlow Condensed", "Arial Narrow", sans-serif;
+    --body: "Atkinson Hyperlegible", system-ui, sans-serif;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #16201b; --panel: #1c2922; --ink: #8cc5a4; --ink-soft: #3f5e4c;
+      --graphite: #e7ebe5; --grader: #ff7a5c; --muted: #9db2a5; color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #16201b; --panel: #1c2922; --ink: #8cc5a4; --ink-soft: #3f5e4c;
+    --graphite: #e7ebe5; --grader: #ff7a5c; --muted: #9db2a5; color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--paper); color: var(--graphite);
+    font: 17px/1.5 var(--body);
+    /* the faint timing marks down the edge of a machine-read sheet */
+    background-image: repeating-linear-gradient(to bottom, var(--ink-soft) 0 6px, transparent 6px 28px);
+    background-size: 10px 100%; background-repeat: no-repeat; background-position: left top;
+  }
+  main { max-width: 1080px; margin: 0 auto; padding: 40px 16px 64px 28px; }
+  h1, h2, h3, .print { font-family: var(--print); color: var(--ink); }
+  h1 { font-size: clamp(44px, 8vw, 76px); line-height: .95; font-weight: 700; margin: 0 0 12px; letter-spacing: -.5px; }
+  .lede { max-width: 62ch; margin: 0 0 28px; color: var(--muted); }
+
+  /* form tabs, like the tabs on a stack of test forms */
+  .tabs { display: flex; gap: 4px; border-bottom: 2px solid var(--ink); flex-wrap: wrap; }
+  .tab {
+    font: 600 21px var(--print); color: var(--ink); background: transparent; cursor: pointer;
+    border: 2px solid var(--ink-soft); border-bottom: none; border-radius: 6px 6px 0 0;
+    padding: 6px 16px 4px; margin-bottom: -2px;
+  }
+  .tab[aria-selected="true"] { background: var(--panel); border-color: var(--ink); border-bottom: 2px solid var(--panel); }
+  .sheet { background: var(--panel); border: 2px solid var(--ink); border-top: none; padding: 24px; }
+  @media (max-width: 640px) { .sheet { padding: 16px 12px; } }
+
+  label.print { display: block; font-size: 20px; font-weight: 600; margin-bottom: 6px; }
+  textarea, select {
+    width: 100%; font: 17px/1.45 var(--body); color: var(--graphite); background: var(--paper);
+    border: 1.5px solid var(--ink-soft); border-radius: 4px; padding: 10px 12px;
+  }
+  textarea { min-height: 96px; resize: vertical; }
+  .examples { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 16px; align-items: baseline; }
+  .examples span { color: var(--muted); font-size: 15px; margin-right: 2px; }
+  .chip {
+    font: 15px var(--body); color: var(--ink); background: transparent; cursor: pointer;
+    border: 1px dashed var(--ink-soft); border-radius: 14px; padding: 2px 10px; max-width: 100%;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .chip:hover { border-style: solid; }
+  .go {
+    font: 700 22px var(--print); color: var(--panel); background: var(--ink); border: none; cursor: pointer;
+    border-radius: 4px; padding: 8px 22px 6px;
+  }
+  .go:disabled { opacity: .5; cursor: progress; }
+  :focus-visible { outline: 3px solid var(--grader); outline-offset: 2px; }
+
+  /* the answer grid */
+  .grid-wrap { overflow-x: auto; margin-top: 28px; }
+  table { border-collapse: collapse; width: 100%; min-width: 520px; }
+  th, td { text-align: left; vertical-align: middle; }
+  thead th { font: 600 19px/1.15 var(--print); color: var(--ink); padding: 0 8px 10px; border-bottom: 2px solid var(--ink); }
+  thead th.player { width: 170px; }
+  .stamp { display: block; font: 500 15px var(--print); color: var(--muted); min-height: 1.2em; }
+  .stamp.filling { color: var(--ink); animation: pulse 1s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: .35; } }
+  tbody.q th { font: 600 19px var(--print); color: var(--ink); padding: 16px 8px 4px; }
+  tbody.q tr.opt td { padding: 3px 8px; border-bottom: 1px solid color-mix(in srgb, var(--ink-soft) 45%, transparent); }
+  td.optname { color: var(--graphite); font-size: 15.5px; }
+  .cell { display: flex; align-items: center; gap: 8px; }
+  .bubble {
+    width: 22px; height: 22px; border-radius: 50%; border: 1.5px solid var(--ink-soft); flex: none;
+    position: relative; overflow: hidden;
+  }
+  .bubble i {   /* the pencil lead: its opacity is the probability */
+    position: absolute; inset: 2px; border-radius: 50%; background: var(--graphite);
+    opacity: 0; transition: opacity .45s ease-out; transition-delay: var(--d, 0s);
+  }
+  .bubble.chosen { border: 2px solid var(--graphite); }
+  .pct { font: 500 15px var(--print); color: var(--muted); min-width: 3ch; }
+  .pct.chosen { color: var(--graphite); font-weight: 700; }
+  .spoiled { color: var(--grader); font: 600 17px/1.2 var(--print); transform: rotate(-4deg); display: inline-block; }
+  td.spoilnote { color: var(--grader); font-size: 14px; padding: 8px; }
+  @media (max-width: 640px) { table { min-width: 0; } thead th.player { width: 96px; } }
+
+  /* race */
+  .race-controls { display: grid; grid-template-columns: 1fr 1fr auto; gap: 12px; align-items: end; }
+  @media (max-width: 640px) { .race-controls { grid-template-columns: 1fr; } }
+  .trail { margin-top: 28px; list-style: none; padding: 0; }
+  .hop { border-left: 3px solid var(--ink-soft); padding: 2px 0 14px 18px; margin-left: 10px; position: relative; }
+  .hop::before {
+    content: ""; position: absolute; left: -12px; top: 6px; width: 18px; height: 18px; border-radius: 50%;
+    background: var(--panel); border: 2px solid var(--ink);
+  }
+  .hop h3 { margin: 0 0 6px; font-size: 21px; font-weight: 600; }
+  .hop .why { color: var(--muted); font-size: 15px; margin: 0 0 8px; }
+  .pick { display: grid; grid-template-columns: 22px minmax(0, 1fr) 46px; gap: 10px; align-items: center; padding: 2px 0; }
+  .pick .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pick.chosen .t { font-weight: 700; }
+  .finish { margin-top: 8px; font: 700 28px var(--print); }
+  .finish.won { color: var(--ink); }
+  .finish.lost { color: var(--grader); }
+  .hint { color: var(--muted); font-size: 15px; margin-top: 10px; }
+  .error { color: var(--grader); margin-top: 12px; }
+  footer { margin-top: 28px; color: var(--muted); font-size: 15px; max-width: 70ch; }
+  @media (prefers-reduced-motion: reduce) {
+    .bubble i { transition: none; }
+    .stamp.filling { animation: none; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>Hand it a form</h1>
+  <p class="lede">Write a message, and every player fills in the same form about it. The darker a bubble, the surer
+    the player is. The ringed bubble is its answer.</p>
+
+  <div class="tabs" role="tablist" id="tabs"></div>
+  <section class="sheet" id="sheet" role="tabpanel"></section>
+
+  <footer id="footer"></footer>
+</main>
+
+<script>
+const $ = (sel, el = document) => el.querySelector(sel);
+const h = (tag, attrs = {}, ...kids) => {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === "class") el.className = v; else if (k === "text") el.textContent = v;
+    else if (k.startsWith("on")) el.addEventListener(k.slice(2), v); else el.setAttribute(k, v);
+  }
+  for (const kid of kids) if (kid != null) el.append(kid);
+  return el;
+};
+const pct = p => `${Math.round(p * 100)}%`;
+
+async function api(path, body) {
+  const res = await fetch(path, body ? { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) } : {});
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `The server answered ${res.status}.`);
+  return data;
+}
+
+let cfg;
+const TABS = [["support", "Support ticket"], ["spam", "Spam check"], ["race", "Wikirace"]];
+
+function tabs(active) {
+  const bar = $("#tabs");
+  bar.replaceChildren(...TABS.map(([key, title]) =>
+    h("button", { class: "tab", role: "tab", "aria-selected": String(key === active), text: title, onclick: () => show(key) })));
+}
+
+function show(key) {
+  tabs(key);
+  if (key === "race") raceSheet(); else formSheet(key);
+}
+
+/* ---------- ask a form ---------- */
+
+function formSheet(key) {
+  const form = cfg.forms[key];
+  const box = h("textarea", { id: "msg", "aria-label": "Message" });
+  box.value = form.examples[0];
+  const go = h("button", { class: "go", text: "Fill in the form" });
+  const examples = h("div", { class: "examples" }, h("span", { text: "Try:" }),
+    ...form.examples.map(ex => h("button", { class: "chip", title: ex, text: ex.length > 46 ? ex.slice(0, 45) + "…" : ex,
+      onclick: () => { box.value = ex; go.click(); } })));
+  const grid = answerGrid(form);
+  const err = h("p", { class: "error", role: "alert" });
+  go.addEventListener("click", () => fill(form, key, box.value, grid, go, err));
+  box.addEventListener("keydown", e => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) go.click(); });
+  $("#sheet").replaceChildren(
+    h("label", { class: "print", for: "msg", text: key === "spam" ? "The text message" : "What the customer wrote" }),
+    box, examples, go, err, h("div", { class: "grid-wrap" }, grid));
+  go.click();  // show a filled-in sheet straight away
+}
+
+function answerGrid(form) {
+  const head = h("tr", {}, h("th", { text: "" }),
+    ...cfg.players.map((name, i) => h("th", { class: "player", scope: "col" }, name, h("span", { class: "stamp", id: `stamp-${i}` }))));
+  const table = h("table", {}, h("thead", {}, head));
+  form.questions.forEach(q => {
+    const body = h("tbody", { class: "q" }, h("tr", {}, h("th", { colspan: String(cfg.players.length + 1), scope: "rowgroup", text: q.label })));
+    q.options.forEach((o, row) => {
+      const tr = h("tr", { class: "opt" }, h("td", { class: "optname", title: o.full, text: o.short }));
+      cfg.players.forEach((_, i) => tr.append(h("td", { "data-cell": `${i}|${q.name}|${o.key}` },
+        h("div", { class: "cell" }, h("span", { class: "bubble", style: `--d:${row * 0.05}s` }, h("i")), h("span", { class: "pct" })))));
+      body.append(tr);
+    });
+    table.append(body);
+  });
+  return table;
+}
+
+function probs(q, a) {
+  if (q.type === "noul") return { yes: a.answer, no: 1 - a.answer };
+  return a.probabilities;
+}
+function chosenKey(q, a) {
+  if (q.type === "noul") return a.answer >= 0.5 ? "yes" : "no";
+  if (q.type === "choice") return a.answer;
+  // a Score's answer is the weighted level (1.37); the box to tick is the most likely level
+  return Object.entries(a.probabilities).reduce((best, kv) => (kv[1] > best[1] ? kv : best))[0];
+}
+
+function reset(grid, i) {
+  grid.querySelectorAll(`[data-cell^="${i}|"]`).forEach(td => {
+    td.replaceChildren(h("div", { class: "cell" }, h("span", { class: "bubble" }, h("i")), h("span", { class: "pct" })));
+  });
+}
+
+async function fill(form, key, message, grid, go, err) {
+  err.textContent = "";
+  if (!message.trim()) { err.textContent = "Type a message first, or pick one of the examples."; return; }
+  go.disabled = true;
+  grid.querySelectorAll(".spoilrow").forEach(r => r.remove());
+  const jobs = cfg.players.map(async (_, i) => {
+    const stamp = $(`#stamp-${i}`, grid);
+    stamp.className = "stamp filling"; stamp.textContent = "filling in…";
+    grid.querySelectorAll(`[data-cell^="${i}|"] i`).forEach(el => { el.style.opacity = 0; });
+    grid.querySelectorAll(`[data-cell^="${i}|"] .bubble, [data-cell^="${i}|"] .pct`).forEach(el => el.classList.remove("chosen"));
+    grid.querySelectorAll(`[data-cell^="${i}|"] .pct`).forEach(el => { el.textContent = ""; });
+    try {
+      const r = await api("/api/ask", { form: key, player: i, message });
+      stamp.className = "stamp"; stamp.textContent = `${r.ms.toLocaleString()} ms`;
+      if (r.error) return spoil(grid, i, r.error);
+      for (const q of form.questions) {
+        const a = r.answers[q.name]; if (!a) continue;
+        const p = probs(q, a), pick = chosenKey(q, a);
+        for (const o of q.options) {
+          const td = grid.querySelector(`[data-cell="${i}|${q.name}|${o.key}"]`);
+          const lead = td.querySelector("i"), v = Math.max(0, Math.min(1, p[o.key] ?? 0));
+          requestAnimationFrame(() => requestAnimationFrame(() => { lead.style.opacity = 0.06 + 0.94 * v; }));
+          const chosen = o.key === pick;
+          td.querySelector(".bubble").classList.toggle("chosen", chosen);
+          const label = td.querySelector(".pct"); label.textContent = pct(v); label.classList.toggle("chosen", chosen);
+        }
+      }
+    } catch (e) {
+      stamp.className = "stamp"; stamp.textContent = "";
+      err.textContent = e.message;
+    }
+  });
+  await Promise.allSettled(jobs);
+  go.disabled = false;
+}
+
+function spoil(grid, i, error) {
+  reset(grid, i);
+  const first = grid.querySelector(`[data-cell^="${i}|"]`);
+  first.replaceChildren(h("span", { class: "spoiled", text: "Spoiled form" }));
+  const note = h("tbody", { class: "spoilrow" }, h("tr", {}, h("td", { class: "spoilnote", colspan: String(cfg.players.length + 1),
+    text: `${cfg.players[i]} sent back answers that don't fit the form: ${error}` })));
+  grid.querySelector("tbody").before(note);
+}
+
+/* ---------- race ---------- */
+
+function raceSheet() {
+  const races = h("select", { id: "race" }, ...cfg.races.map((r, i) =>
+    h("option", { value: String(i), text: `${r.start} to ${r.target} (${r.shortest} hops)` })));
+  races.value = String(Math.max(0, cfg.races.findIndex(r => r.target === "Garry Kasparov")));
+  const players = h("select", { id: "player" }, ...cfg.players.map((p, i) => h("option", { value: String(i), text: p })));
+  const go = h("button", { class: "go", text: "Start the race" });
+  const trail = h("ol", { class: "trail", "aria-live": "polite" });
+  const err = h("p", { class: "error", role: "alert" });
+  go.addEventListener("click", () => race(+races.value, +players.value, trail, go, err));
+  $("#sheet").replaceChildren(
+    h("p", { class: "hint", text: "Get from one Wikipedia article to another only by clicking links. At each page the player gets a one-question form: which of these links is the best next step?" }),
+    h("div", { class: "race-controls" },
+      h("div", {}, h("label", { class: "print", for: "race", text: "Race" }), races),
+      h("div", {}, h("label", { class: "print", for: "player", text: "Player" }), players), go),
+    err, trail);
+}
+
+const wait = ms => new Promise(r => setTimeout(r, matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : ms));
+
+async function race(raceIdx, player, trail, go, err) {
+  err.textContent = ""; go.disabled = true;
+  const r = cfg.races[raceIdx];
+  trail.replaceChildren(h("li", { class: "hint", text: `${cfg.players[player]} is racing. Each hop is one model decision, so a slow player takes a while.` }));
+  try {
+    const res = await api("/api/race", { race: raceIdx, player });
+    trail.replaceChildren();
+    for (const [n, s] of res.steps.entries()) {
+      const hop = h("li", { class: "hop" }, h("h3", { text: `Hop ${n + 1}: on ${s.page}` }));
+      if (s.mode === "direct") {
+        hop.append(h("p", { class: "why", text: `${s.chosen} is linked right here, so plain code clicks it. No model needed.` }));
+      } else {
+        const why = s.mode === "two-stage"
+          ? `${s.candidates} links: more than one form can hold, so it scored each link first, then chose from the best 100.`
+          : `${s.candidates} links to choose from. ${s.ms.toLocaleString()} ms to decide.`;
+        hop.append(h("p", { class: "why", text: why }));
+        for (const [title, p] of s.top) {
+          const chosen = title === s.chosen;
+          hop.append(h("div", { class: `pick${chosen ? " chosen" : ""}` },
+            h("span", { class: `bubble${chosen ? " chosen" : ""}` }, h("i", { style: `opacity:${0.06 + 0.94 * p}` })),
+            h("span", { class: "t", title, text: title }), h("span", { class: `pct${chosen ? " chosen" : ""}`, text: pct(p) })));
+        }
+      }
+      trail.append(hop);
+      await wait(550);
+    }
+    const won = res.success;
+    trail.append(h("li", { class: `finish ${won ? "won" : "lost"}`,
+      text: won ? `Reached ${r.target} in ${res.hops} hops. The shortest route is ${r.shortest}.` : `Stopped: ${res.reason}.` }));
+  } catch (e) {
+    trail.replaceChildren(); err.textContent = e.message;
+  }
+  go.disabled = false;
+}
+
+/* ---------- start ---------- */
+
+api("/api/config").then(c => {
+  cfg = c;
+  $("#footer").textContent = `Players: ${c.players.join(", ")}. The keyword rules are always here. Add a model by restarting with --ollama, --llm or --live.`;
+  show("support");
+}).catch(e => { $("#sheet").textContent = `Couldn't load the playground: ${e.message}`; });
+</script>
+</body>
+</html>
