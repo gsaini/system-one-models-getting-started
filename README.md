@@ -88,7 +88,7 @@ uv run systemone calibration --ollama --limit 100
 uv run systemone demo --ollama llama3.2           # name a model; the default is tinyllama
 ```
 
-A 1.1B model like tinyllama mostly shows what Jev claims to fix: Ollama keeps the JSON in shape, but not the numbers in it, so answers come back with "probabilities" like 141 and count as broken.
+A 1.1B model like tinyllama mostly shows what Jev claims to fix: Ollama keeps the JSON in shape, but not the numbers in it, so answers come back with "probabilities" like 141 and count as broken. Measured numbers for tinyllama and qwen2.5:3b are under [Results](#measured-locally-2026-10-19-two-small-models-through-ollama).
 
 ## Show it to someone
 
@@ -148,6 +148,42 @@ The reliability table shows where the baseline's probabilities lie: messages it 
 The baseline picks by word overlap with the target's title and the races were chosen so there is none, so it ties on every option and walks to the first one alphabetically: *A Review of General Semantics*, then a dead end. A model has to know that *Nudge* is behavioural economics, that *Antifragile* is Taleb's, and that *Garry Kasparov* is one hop from *Alan Turing*.
 
 > **Two caveats on the race.** The bundled snapshot has outgoing links for 257 pages (the two roots and everything they link to); a race may only move onto those pages, and the most any page links to among them is 163. So the **two-stage path (>255 options) never triggers on this data**; it is exercised by a unit test with 401 synthetic candidates. And Wikipedia link lists change: the snapshot's `built` field says when it was taken.
+
+### Measured locally, 2026-10-19: two small models through Ollama
+
+Same questions, same SDK call, two free models on a laptop: `tinyllama` (1.1B) and `qwen2.5:3b` (3B), through the adapter's OpenAI-compatible provider with Ollama's schema-constrained JSON. **These say nothing about Jev either.** They show what a cheap local LLM does with the same forms, which is the other thing a team might try before paying for a model.
+
+**`calibration`**, the first 100 messages (12 spam):
+
+| | keyword baseline | tinyllama | qwen2.5:3b |
+|---|---|---|---|
+| answers the SDK rejected | 0 | **20 of 100** | 0 |
+| accuracy at p ≥ 0.5 | 97.0% | 37.5% | 67.0% |
+| precision / recall | 100% / 75.0% | 4.3% / 28.6% | 24.4% / 83.3% |
+| Brier (lower is better) | 0.023 | 0.448 | 0.305 |
+| **ECE** (lower is better) | **0.052** | **0.528** | **0.315** |
+| AUC | 0.992 | 0.440 | 0.795 |
+| latency p50 / p95 | 0 ms | 373 / 444 ms | 779 / 1,211 ms |
+
+tinyllama's scores are over the 80 answers that came back valid. Ollama keeps the JSON in shape, but not the numbers in it: the other 20 had "probabilities" like 141 and 25,892,136, and the SDK's validation rejected them; the eight-question `demo` form failed the same way. That is the type-safety claim seen from the other side: a schema guarantees the shape of an answer, not that its numbers mean anything.
+
+qwen2.5:3b returned 100 valid answers, and its probabilities are still not probabilities. Its reliability table has two rows that matter: 57 messages at mean p **0.01** (4% spam) and 37 at mean p **0.98**, of which **27%** were spam. When it says 98%, it is right one time in four. The threshold sweep can't rescue it, because flagging at p ≥ 0.1 and at p ≥ 0.9 pick nearly the same 37–43 messages: almost nothing lands in between. It is a yes/no in disguise, which is exactly the failure "calibrated decisions" claims to fix, and the measurement a Jev run should be judged on. A second run on the same 100 messages scored 72%; the model samples, so expect a few points of noise.
+
+**`wikirace`**, the first 4 races: keyword baseline **1/4**, tinyllama **0/4** (3 of its 5 requests rejected, 16.5 s per decision), qwen2.5:3b **0/4**. Race 1 replayed with `systemone race --race 1 --ollama qwen2.5:3b`:
+
+```text
+hop 1  on Thinking, Fast and Slow: 99 links to choose from…
+     ▸ Non-fiction                          33%
+       Noise: A Flaw in Human Judgment      33%
+       A Review of General Semantics        32%
+       → Non-fiction   (1 request, 66,617 ms)
+hop 2  on Non-fiction: 3 links to choose from…
+     ▸ ISBN (identifier)                    70%
+       → ISBN (identifier)   (1 request, 1,513 ms)
+✗ dead end at 'ISBN (identifier)'
+```
+
+A flat three-way tie that includes the right answer (*Noise* is Kahneman's other book), the generic option taken, then a confident pick of a dead end. And the one Choice over 99 options took 67 seconds, because the model writes a 99-entry distribution token by token. The post's number for Jev is 70–500 ms over up to 255 options. That gap, more than the accuracy, is the part a local LLM can't close by getting bigger.
 
 ### Live results
 
