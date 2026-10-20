@@ -92,3 +92,10 @@ def test_ollama_arm_fails_once_up_front_when_no_server_is_running():
 
     with pytest.raises(MissingCredentials, match="No Ollama server"):
         ollama_arm("tinyllama", base_url="http://127.0.0.1:9/v1")
+
+
+def test_cloud_models_get_prompted_json_and_local_ones_the_schema():
+    from systemone.arms import constrained_by_default
+
+    assert constrained_by_default("qwen2.5:7b") and constrained_by_default("tinyllama")
+    assert not constrained_by_default("minimax-m3.1-flash:cloud")

@@ -90,6 +90,8 @@ uv run systemone demo --ollama llama3.2           # name a model; the default is
 
 A 1.1B model like tinyllama mostly shows what Jev claims to fix: Ollama keeps the JSON in shape, but not the numbers in it, so answers come back with "probabilities" like 141 and count as broken. Measured numbers for tinyllama, qwen2.5:3b and qwen2.5:7b are under [Results](#measured-locally-2026-10-19-three-small-models-through-ollama).
 
+Ollama's `:cloud` models take the same flag (`--ollama minimax-m3.1-flash:cloud`) but run on Ollama's servers, not your machine: the data leaves the laptop, and outside a free period they are billed per token. Their route drops `response_format`, so the arm asks for the JSON in the prompt instead and says so in its name. One such run is recorded under [Results](#measured-through-ollamas-cloud-2026-10-20-minimax-m31-flash).
+
 ## Show it to someone
 
 Four commands for demos rather than measurement. Each one takes the same `--ollama`, `--llm` and `--live` flags as the experiments.
@@ -189,6 +191,35 @@ A flat three-way tie that includes the right answer (*Noise* is Kahneman's other
 
 qwen2.5:7b made the same point from the other side: 0/4 as well, 13 decisions with none rejected, at a median of 16 s and a worst case of 63 s per decision. Its hops were on-topic in a way the 3B's were not (*Thinking, Fast and Slow* → *Daniel Kahneman*, → *Dual process theory*, → *Cognitive bias*) and it still never reached a target. From *Daniel Kahneman* it chose *The Guardian*, then wandered through *World War II* and *Bletchley Park* to *Alan Turing* until the hop budget ran out. Knowing the subject is not the same as steering toward a page.
 
+### Measured through Ollama's cloud, 2026-10-20: MiniMax M3.1 Flash
+
+One run of `minimax-m3.1-flash:cloud`, a 428B model that Ollama hosts and does not ship for local use. It was free until 2026-10-22; at its list price of $0.15 per million input tokens and $0.60 per million output, the two experiments below would cost about 4 cents. This is the only run in this README where the data left the machine. Because Ollama's cloud route drops `response_format`, the adapter asked for the JSON in the prompt rather than constraining the output to the schema; every answer still came back valid.
+
+**`calibration`**, the first 100 messages (12 spam), with the local 7B model for comparison:
+
+| | keyword baseline | qwen2.5:7b, local | MiniMax M3.1 Flash, cloud |
+|---|---|---|---|
+| answers the SDK rejected | 0 | 0 | 0 |
+| accuracy at p ≥ 0.5 | 97.0% | 65.0% | 92.0% |
+| precision / recall | 100% / 75.0% | 23.3% / 83.3% | 62.5% / 83.3% |
+| Brier (lower is better) | 0.023 | 0.259 | 0.072 |
+| **ECE** (lower is better) | **0.052** | **0.338** | **0.068** |
+| AUC | 0.992 | 0.860 | 0.925 |
+| latency p50 / p95 | 0 ms | 1,964 / 2,164 ms | 1,586 / 2,853 ms |
+
+Its probabilities are almost all 0.01 or 0.99: 83 messages in the bottom bucket, 14 in the top, 3 in between. The low ones are honest (2% of those 83 were spam). The high ones are not (64% of the 14 were spam, against a stated 0.99). The ECE of 0.068 is close to the rules' because saying "no" well is most of this task; the overconfidence is in the yes's, which is where a threshold would be set.
+
+**`wikirace`**, the first 4 races: **4/4 solved**, 10 hops where 8 is the minimum, 6 model decisions, none rejected. The paths are the ones a person who knows the books would take:
+
+```text
+Thinking, Fast and Slow → Behavioral economics → Nudge (book)
+Thinking, Fast and Slow → Nassim Nicholas Taleb → Antifragile (book)
+Thinking, Fast and Slow → Probability → Conditional probability → Monty Hall problem
+Thinking, Fast and Slow → Happiness → Emotion → Dopamine
+```
+
+The cost of that judgement is time: **40 s median and 103 s worst** per decision, because a Choice over 99 links is answered as a 99-entry distribution written out in the prompt's JSON (35,704 output tokens over 6 decisions). The rules decide in under a millisecond and lose; the post claims Jev decides over up to 255 options in 70–500 ms. The same model answered the six-question incident form in the companion repo, [system-one-incident-triage](https://github.com/gsaini/system-one-incident-triage), picking the owning team right 18 times out of 20 where the 7B model managed 0. So this is the first arm here to beat the rules at something, and the first to show what a Jev run has to match: this model's judgement at the rules' speed, with the top-end overconfidence trained out. These numbers give the bar on both sides.
+
 ### Live results
 
 Not run: the machine this was built on had neither key. If you run the live commands, the saved `runs/*/report.md` has the tables above with the extra columns filled; paste them here with the date and the `model` field the API reported (Jev's alias `jev-latest` resolves to a versioned ID).
@@ -225,7 +256,7 @@ docs/              claims.md · how-it-was-built.md
 
 - [docs/claims.md](docs/claims.md): each claim, what it measures, TypeSafe's own stated nuance, and the independent evidence so far.
 - TypeSafe: [the post](https://typesafe.ai/blog/introducing-system-one-models-and-jev) · [docs](https://docs.typesafe.ai/) · [models & pricing](https://docs.typesafe.ai/models) · [Jev 1.13's known weak spots](https://docs.typesafe.ai/model-jaggedness/jev-1.13) · [workflow evals](https://evals.typesafe.ai/) · [system-one-adapter](https://github.com/typesafe-ai/system-one-adapter-python)
-- Companion work: [jev-claude-code-case-study](https://github.com/gsaini/jev-claude-code-case-study) (Jev inside apps and inside Claude Code's loop) · study notes on [Jev + Claude Code](https://github.com/gsaini/awesome-software-engineering/blob/main/notes/jev-claude-code.md) and [Jev Ultrafast](https://github.com/gsaini/awesome-software-engineering/blob/main/notes/jev-ultrafast.md)
+- Companion work: [system-one-incident-triage](https://github.com/gsaini/system-one-incident-triage) (one use case, incident triage, as six typed questions: rules vs local and cloud models on 20 labelled reports) · [jev-claude-code-case-study](https://github.com/gsaini/jev-claude-code-case-study) (Jev inside apps and inside Claude Code's loop) · study notes on [Jev + Claude Code](https://github.com/gsaini/awesome-software-engineering/blob/main/notes/jev-claude-code.md) and [Jev Ultrafast](https://github.com/gsaini/awesome-software-engineering/blob/main/notes/jev-ultrafast.md)
 
 ## License
 
